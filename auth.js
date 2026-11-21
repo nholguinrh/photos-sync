@@ -8,15 +8,15 @@ const PHOTOS_KEY = "simon_photos";
 const LOGIN_PAGE = "login.html";
 const HOME_PAGE = "index.html";
 const PHOTOS_MAX_AGE = 50 * 60 * 1000;
-const PAGE_ORDER = [
-  "index.html",
-  "canada.html",
-  "colombia.html",
-  "trips.html",
-  "simon-family.html",
-  "family.html",
-  "gallery.html",
-  "story.html",
+const PAGE_INFO = [
+  { file: "index.html", label: "Home" },
+  { file: "canada.html", label: "Memories of Canada" },
+  { file: "colombia.html", label: "Memories of Colombia" },
+  { file: "trips.html", label: "Trips & Adventures" },
+  { file: "simon-family.html", label: "Family of Simon" },
+  { file: "family.html", label: "Our General Family" },
+  { file: "gallery.html", label: "Photo Gallery" },
+  { file: "story.html", label: "Her Story" },
 ];
 
 function isLoginPage() {
@@ -211,17 +211,31 @@ function saveStoredPhotos(items) {
   );
 }
 
-function currentPageIndex() {
+function currentPageFile() {
   const file = location.pathname.split("/").pop() || HOME_PAGE;
-  const index = PAGE_ORDER.indexOf(file);
-  return index === -1 ? 0 : index;
+  return PAGE_INFO.some((page) => page.file === file) ? file : HOME_PAGE;
 }
 
 function photosForPage(items) {
-  if (items.length < 2) return items;
-  const step = Math.max(1, Math.ceil(items.length / PAGE_ORDER.length));
-  const offset = (currentPageIndex() * step) % items.length;
-  return items.slice(offset).concat(items.slice(0, offset));
+  const file = currentPageFile();
+  return items.filter((item) => item.page === file);
+}
+
+function mergePhotos(existing, incoming) {
+  const byId = new Map();
+  existing.forEach((item) => {
+    byId.set(item.id || item.baseUrl, { ...item });
+  });
+  incoming.forEach((item) => {
+    const key = item.id || item.baseUrl;
+    const previous = byId.get(key) || {};
+    byId.set(key, {
+      ...previous,
+      ...item,
+      page: item.page || previous.page || "",
+    });
+  });
+  return Array.from(byId.values());
 }
 
 function durationToMs(value, fallback) {
@@ -324,7 +338,6 @@ async function pickPhotos() {
     }
     await pollPickerSession(pickerSession);
     const items = await listPickedItems(pickerSession.id);
-    saveStoredPhotos(items);
     if (popup && !popup.closed) popup.close();
     return items;
   } catch (error) {
@@ -431,6 +444,119 @@ function showGridMessage(grid, text, isError) {
   grid.appendChild(message);
 }
 
+function appendPageOptions(select, includeEmpty) {
+  if (includeEmpty) {
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Sin asignar";
+    select.appendChild(empty);
+  }
+  PAGE_INFO.forEach((page) => {
+    const option = document.createElement("option");
+    option.value = page.file;
+    option.textContent = page.label;
+    select.appendChild(option);
+  });
+}
+
+async function fillCategorizeThumb(image, item) {
+  try {
+    image.src = await photoBlobUrl(item, 320, 320);
+  } catch (error) {
+    image.alt = "No se pudo cargar la foto";
+  }
+}
+
+function openCategorizeDialog(items, onSave) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "categorize-dialog";
+
+  const panel = document.createElement("div");
+  panel.className = "categorize-panel";
+
+  const title = document.createElement("h2");
+  title.textContent = "Categorizar fotos";
+
+  const text = document.createElement("p");
+  text.textContent =
+    "Asigna cada foto a la página del menú donde quieres verla. Las fotos sin asignar no se muestran.";
+
+  const selects = new Map();
+
+  const bulk = document.createElement("div");
+  bulk.className = "categorize-bulk";
+  const bulkLabel = document.createElement("label");
+  bulkLabel.textContent = "Asignar todas a:";
+  const bulkSelect = document.createElement("select");
+  appendPageOptions(bulkSelect, true);
+  const bulkButton = document.createElement("button");
+  bulkButton.type = "button";
+  bulkButton.className = "categorize-bulk-apply";
+  bulkButton.textContent = "Aplicar";
+  bulkButton.addEventListener("click", () => {
+    selects.forEach((select) => {
+      select.value = bulkSelect.value;
+    });
+  });
+  bulkLabel.appendChild(bulkSelect);
+  bulk.append(bulkLabel, bulkButton);
+
+  const grid = document.createElement("div");
+  grid.className = "categorize-grid";
+
+  items.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "categorize-item";
+
+    const image = document.createElement("img");
+    image.alt = item.filename || "Foto de Google Photos";
+    image.loading = "lazy";
+    fillCategorizeThumb(image, item);
+
+    const name = document.createElement("span");
+    name.className = "categorize-name";
+    name.textContent = item.filename || "Foto";
+
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "Página para " + (item.filename || "la foto"));
+    appendPageOptions(select, true);
+    select.value = item.page || "";
+    selects.set(item.id || item.baseUrl, select);
+
+    card.append(image, name, select);
+    grid.appendChild(card);
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "categorize-actions";
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "categorize-cancel";
+  cancel.textContent = "Cancelar";
+  cancel.addEventListener("click", () => dialog.close());
+
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "categorize-save";
+  save.textContent = "Guardar categorías";
+  save.addEventListener("click", () => {
+    const updated = items.map((item) => {
+      const select = selects.get(item.id || item.baseUrl);
+      return { ...item, page: select ? select.value : item.page || "" };
+    });
+    onSave(updated);
+    dialog.close();
+  });
+
+  actions.append(cancel, save);
+  panel.append(title, text, bulk, grid, actions);
+  dialog.appendChild(panel);
+  document.body.appendChild(dialog);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
+}
+
 async function fillPhotoGrid(grid, items, skip) {
   grid.textContent = "";
   const start = Number(skip) || 0;
@@ -470,8 +596,8 @@ async function loadPhotos() {
   const grid = ensurePhotoSection();
   const placeholders = document.querySelectorAll(".photo-placeholder");
   if (!grid && !placeholders.length) return;
-  const items = readStoredPhotos();
-  if (!items.length) {
+  const stored = readStoredPhotos();
+  if (!stored.length) {
     if (grid) {
       showGridMessage(
         grid,
@@ -481,10 +607,20 @@ async function loadPhotos() {
     }
     return;
   }
+  const items = photosForPage(stored);
+  if (!items.length) {
+    if (grid) {
+      showGridMessage(
+        grid,
+        "No hay fotos asignadas a esta página. Categorízalas desde Inicio.",
+        false
+      );
+    }
+    return;
+  }
   try {
-    const arranged = photosForPage(items);
-    if (grid) await fillPhotoGrid(grid, arranged, placeholders.length);
-    await fillPlaceholders(arranged);
+    if (grid) await fillPhotoGrid(grid, items, placeholders.length);
+    await fillPlaceholders(items);
   } catch (error) {
     if (grid) {
       showGridMessage(
@@ -513,16 +649,25 @@ function wireSyncButton() {
     button.textContent = "Abriendo Google Photos...";
     setSyncStatus("", false);
     try {
-      const items = await pickPhotos();
-      if (items.length) {
-        setSyncStatus(
-          "Seleccionaste " + items.length + " foto" + (items.length === 1 ? "" : "s") + ".",
-          false
-        );
-      } else {
+      const picked = await pickPhotos();
+      if (!picked.length) {
         setSyncStatus("No seleccionaste fotos.", false);
+        return;
       }
-      await loadPhotos();
+      const merged = mergePhotos(readStoredPhotos(), picked);
+      setSyncStatus(
+        "Seleccionaste " +
+          picked.length +
+          " foto" +
+          (picked.length === 1 ? "" : "s") +
+          ". Asígnalas a una página.",
+        false
+      );
+      openCategorizeDialog(merged, (categorized) => {
+        saveStoredPhotos(categorized);
+        setSyncStatus("Categorías guardadas.", false);
+        loadPhotos();
+      });
     } catch (error) {
       setSyncStatus(
         "No se pudo sincronizar: " + (error.message || "error desconocido"),
@@ -535,9 +680,27 @@ function wireSyncButton() {
   });
 }
 
+function wireCategorizeButton() {
+  const button = document.querySelector("#categorize-photos");
+  if (!button) return;
+  button.addEventListener("click", () => {
+    const items = readStoredPhotos();
+    if (!items.length) {
+      setSyncStatus("Primero sincroniza fotos desde Google Photos.", true);
+      return;
+    }
+    openCategorizeDialog(items, (categorized) => {
+      saveStoredPhotos(categorized);
+      setSyncStatus("Categorías guardadas.", false);
+      loadPhotos();
+    });
+  });
+}
+
 function init() {
   mountUserChip();
   wireSyncButton();
+  wireCategorizeButton();
   loadPhotos();
   if (document.querySelector("#sync-photos")) {
     loadGis().catch(() => {});
