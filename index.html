@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home | Mom, Forever in Our Hearts</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header id="home">
+  <h1>Mom, Forever in Our Hearts</h1>
+  <p class="subtitle">A lifetime of memories, love, and stories</p>
+</header>
+<button class="menu-toggle" type="button" aria-controls="main-nav">Menu</button>
+<nav id="main-nav" aria-label="Main navigation">
+  <h2 class="nav-title">Explore</h2>
+  <a href="index.html">Home</a>
+  <a href="canada.html">Memories of Canada</a>
+  <a href="colombia.html">Memories of Colombia</a>
+  <a href="trips.html">Trips & Adventures</a>
+  <a href="simon-family.html">Family of Simon</a>
+  <a href="family.html">Our General Family</a>
+  <a href="gallery.html">Photo Gallery</a>
+  <a href="story.html">Her Story</a>
+</nav>
+<main>
+  <section class="intro">
+    <h2>Welcome to Mom’s Memory Book</h2>
+    <p>This is a place to celebrate a beautiful life, preserve treasured stories, and keep family memories close.</p><p>Every photograph, journey, and shared moment is part of the love she gave and the memories we carry.</p><p class="section-note">Forever remembered, forever loved.</p>
+  </section>
+  <section class="photo-sync">
+    <h2>Google Photos</h2>
+    <p>Elige fotos con el selector seguro de Google Photos para verlas aquí y en cada página del menú.</p>
+    <button id="sync-photos" class="sync-button" type="button">Sincronizar con Google Photos</button>
+    <p id="sync-status" class="sync-status" role="status"></p>
+    <div id="google-photos-grid" class="photo-grid"></div>
+  </section>
+</main>
+<footer><p>With love, remembering Mom — forever in our hearts.</p></footer>
+<script src="auth.js" defer></script>
+</body>
+</html>
